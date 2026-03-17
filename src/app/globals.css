@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card-bg: #1a1a2e;
+  --card-border: #16213e;
+  --accent: #e94560;
+  --accent-hover: #ff6b81;
+  --primary: #0f3460;
+  --primary-light: #533483;
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --cube-white: #ffffff;
+  --cube-yellow: #ffd32a;
+  --cube-red: #e94560;
+  --cube-orange: #ff9f43;
+  --cube-blue: #0984e3;
+  --cube-green: #00b894;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Cube colors */
+.face-U { background-color: var(--cube-white); }
+.face-D { background-color: var(--cube-yellow); }
+.face-F { background-color: var(--cube-green); }
+.face-B { background-color: var(--cube-blue); }
+.face-R { background-color: var(--cube-red); }
+.face-L { background-color: var(--cube-orange); }
+.face-X { background-color: #333; }
+
+/* Notation highlight */
+.notation {
+  display: inline-block;
+  background: rgba(233, 69, 96, 0.2);
+  border: 1px solid rgba(233, 69, 96, 0.4);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: var(--font-mono), monospace;
+  font-weight: 600;
+  font-size: 0.95em;
+  color: #ff6b81;
+  margin: 0 1px;
+}
+
+/* Algorithm display */
+.algorithm-text {
+  font-family: var(--font-mono), monospace;
+  font-size: 1.1em;
+  letter-spacing: 0.5px;
+  color: #e94560;
+  background: rgba(233, 69, 96, 0.1);
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(233, 69, 96, 0.2);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Glow animation */
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(233, 69, 96, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(233, 69, 96, 0.6); }
+}
+
+.glow-animation {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Pulse */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
 }
