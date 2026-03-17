@@ -11,6 +11,8 @@ const navItems = [
   { href: "/level/3", label: "Lv.3 고급", icon: "🟠" },
   { href: "/level/4", label: "Lv.4 스피드", icon: "🔴" },
   { href: "/timer", label: "타이머", icon: "⏱️" },
+  { href: "/simulator", label: "3D 시뮬레이터", icon: "🧊" },
+  { href: "/competitions", label: "대회/월드컵", icon: "🏆" },
 ];
 
 export default function Navigation() {
