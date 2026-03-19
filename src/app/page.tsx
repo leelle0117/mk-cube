@@ -81,18 +81,25 @@ const notationGuide: NotationItem[] = [
 
 // 3D isometric cube SVG with highlighted face and rotation arrow
 function CubeDiagram({ face, color, dir }: { face: string; color: string; dir: "cw" | "ccw" | "180" }) {
-  // Standard isometric view: Top=U, Left=F, Right=R
-  // Mirrored view for L, B: Top=U, Left=R(→L mirrored), Right=F(→B mirrored)
-  const mirror = face === "L" || face === "B";
+  const mirror = face === "L"; // only L is mirrored
+  const frontView = face === "F" || face === "B";
 
   // Which of the 3 visible faces to highlight
+  // R: standard view, right face
+  // L: standard view mirrored, right face (appears as left)
+  // F: front view (shallow top), left face
+  // B: front view (tall top), right face — different from F!
   let hTop = face === "U";
-  let hRight = mirror ? (face === "L") : (face === "R");
-  let hLeft = mirror ? (face === "B") : (face === "F");
+  let hRight = false;
+  let hLeft = false;
   const hBottom = face === "D";
-  if (hBottom) { hTop = false; hRight = false; hLeft = false; }
+  if (!hBottom && !hTop) {
+    if (face === "R") hRight = true;
+    else if (face === "L") hRight = true; // mirrored → appears as left
+    else if (face === "F") hLeft = true;  // left face = front
+    else if (face === "B") hRight = true; // right face = back (different from F)
+  }
 
-  // Face fills
   const topFill = hTop ? color : "#1a1a2e";
   const rightFill = hRight ? color : "#222240";
   const leftFill = hLeft ? color : "#1c1c35";
@@ -100,9 +107,133 @@ function CubeDiagram({ face, color, dir }: { face: string; color: string; dir: "
   const rightOp = hRight ? 0.9 : 1;
   const leftOp = hLeft ? 0.9 : 1;
 
-  // Isometric vertices (viewBox 80x72)
-  // A=back-top, B=right-top, C=front-top, D=left-top
-  // E=right-bottom, F=front-bottom, G=left-bottom
+  // Vertices: all symmetric cubes, but F/B use a slightly different vertical angle
+  // Standard (R/L/U/D): balanced top view
+  // F view: top face smaller (looking more from the front, less from above)
+  // B view: top face larger (looking more from above)
+  let VA: number[], VB: number[], VC: number[], VD: number[];
+  let VE: number[], VF: number[], VG: number[];
+
+  if (face === "F" || face === "F'") {
+    // F: cube rotated slightly right → left face (front, colored) appears wider
+    // right=(23,12), left=(-19,12), symmetric-looking cube
+    VA = [36, 14]; VB = [59, 26]; VD = [17, 26];
+    VC = [40, 38];
+    VE = [59, 48]; VF = [40, 60]; VG = [17, 48];
+  } else if (face === "B" || face === "B'") {
+    // B: same rotation → right face (back, colored) appears narrower
+    VA = [36, 5]; VB = [59, 17]; VD = [17, 17];
+    VC = [40, 29];
+    VE = [59, 47]; VF = [40, 59]; VG = [17, 47];
+  } else {
+    // Standard symmetric isometric (R/L/U/D)
+    VA = [40, 8]; VB = [62, 21]; VD = [18, 21];
+    VC = [40, 34];
+    VE = [62, 46]; VF = [40, 59]; VG = [18, 46];
+  }
+
+  function lerp(p1: number[], p2: number[], t: number): number[] {
+    return [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t];
+  }
+  function gridPaths(p0: number[], p1: number[], p2: number[], p3: number[]) {
+    const d: string[] = [];
+    for (let i = 1; i <= 2; i++) {
+      const t = i / 3;
+      const a = lerp(p0, p3, t), b = lerp(p1, p2, t);
+      d.push(`M${a[0]},${a[1]}L${b[0]},${b[1]}`);
+      const c2 = lerp(p0, p1, t), d2 = lerp(p3, p2, t);
+      d.push(`M${c2[0]},${c2[1]}L${d2[0]},${d2[1]}`);
+    }
+    return d.join(" ");
+  }
+  function pts(ps: number[][]) { return ps.map(p => p.join(",")).join(" "); }
+
+  const topGrid = gridPaths(VA, VB, VC, VD);
+  const rightGrid = gridPaths(VB, VE, VF, VC);
+  const leftGrid = gridPaths(VD, VC, VF, VG);
+
+  // Arrow positions depend on view type and highlighted face
+  let arrowPath = "";
+  let arrowHead = "";
+  const cw = dir === "cw";
+  const is180 = dir === "180";
+
+  if (hTop) {
+    arrowPath = cw ? "M48,17 Q50,26 40,28 Q30,26 32,17" : "M32,17 Q30,26 40,28 Q50,26 48,17";
+    arrowHead = cw ? "52,19 47,12 44,20" : "28,19 33,12 36,20";
+  } else if (hRight) {
+    // R face (standard), L face (mirrored), or B face (frontView, right face)
+    const cy = (face === "B" || face === "B'") ? 38 : 40;
+    const y0 = cy - 10; const y1 = cy + 10;
+    arrowPath = cw
+      ? `M53,${y0} Q44,${y0+3} 43,${cy} Q44,${y1-3} 53,${y1}`
+      : `M53,${y1} Q44,${y1-3} 43,${cy} Q44,${y0+3} 53,${y0}`;
+    arrowHead = cw ? `57,${y1+2} 50,${y1+2} 53,${y1-5}` : `57,${y0-2} 50,${y0-2} 53,${y0+5}`;
+  } else if (hLeft) {
+    // F face (frontView, arrow on left face)
+    const cy = frontView ? 44 : 40;
+    const y0 = cy - 10; const y1 = cy + 10;
+    arrowPath = cw
+      ? `M24,${y1} Q33,${y1-3} 34,${cy} Q33,${y0+3} 24,${y0}`
+      : `M24,${y0} Q33,${y0+3} 34,${cy} Q33,${y1-3} 24,${y1}`;
+    arrowHead = cw ? `20,${y0-2} 27,${y0-2} 24,${y0+5}` : `20,${y1+2} 27,${y1+2} 24,${y1-5}`;
+  } else if (hBottom) {
+    arrowPath = cw ? "M48,56 Q50,64 40,66 Q30,64 32,56" : "M32,56 Q30,64 40,66 Q50,64 48,56";
+    arrowHead = cw ? "52,58 47,52 44,59" : "28,58 33,52 36,59";
+  }
+
+  return (
+    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" className="shrink-0"
+      style={mirror ? { transform: "scaleX(-1)" } : undefined}
+    >
+      {/* D face indicator (bottom, behind the cube) */}
+      {hBottom && (
+        <polygon points={pts([VC, VB, VE, VF])} fill={color} opacity="0.15" />
+      )}
+      {hBottom && (
+        <polygon points={pts([VC, VD, VG, VF])} fill={color} opacity="0.1" />
+      )}
+
+      {/* Three visible faces */}
+      <polygon points={pts([VA, VB, VC, VD])} fill={topFill} opacity={topOp} />
+      <polygon points={pts([VB, VE, VF, VC])} fill={rightFill} opacity={rightOp} />
+      <polygon points={pts([VD, VC, VF, VG])} fill={leftFill} opacity={leftOp} />
+
+      {/* Grid lines */}
+      <path d={topGrid} stroke="white" strokeWidth="0.5" opacity={hTop ? "0.5" : "0.12"} />
+      <path d={rightGrid} stroke="white" strokeWidth="0.5" opacity={hRight ? "0.5" : "0.12"} />
+      <path d={leftGrid} stroke="white" strokeWidth="0.5" opacity={hLeft ? "0.5" : "0.12"} />
+
+      {/* Face outlines */}
+      <polygon points={pts([VA, VB, VC, VD])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+      <polygon points={pts([VB, VE, VF, VC])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+      <polygon points={pts([VD, VC, VF, VG])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+
+      {/* Highlighted face border */}
+      {hTop && <polygon points={pts([VA, VB, VC, VD])} fill="none" stroke={color} strokeWidth="1.5" />}
+      {hRight && <polygon points={pts([VB, VE, VF, VC])} fill="none" stroke={color} strokeWidth="1.5" />}
+      {hLeft && <polygon points={pts([VD, VC, VF, VG])} fill="none" stroke={color} strokeWidth="1.5" />}
+      {hBottom && (
+        <>
+          <line x1={VC[0]} y1={VC[1]} x2={VF[0]} y2={VF[1]} stroke={color} strokeWidth="1.2" strokeDasharray="3 2" />
+          <line x1={VB[0]} y1={VB[1]} x2={VE[0]} y2={VE[1]} stroke={color} strokeWidth="1.2" strokeDasharray="3 2" opacity="0.5" />
+        </>
+      )}
+
+      {/* Rotation arrow */}
+      {arrowPath && (
+        <>
+          <path d={arrowPath} stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <polygon points={arrowHead} fill="white" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+// Whole-cube rotation diagram: arrow wraps around the entire cube
+function CubeRotationDiagram({ axis, dir }: { axis: "x" | "y" | "z"; dir: "cw" | "ccw" | "180" }) {
+  // Same isometric cube but all faces neutral, with a large arrow around the cube
   const A = [40, 8], B = [62, 21], C = [40, 34], D = [18, 21];
   const E = [62, 46], F = [40, 59], G = [18, 46];
 
@@ -126,91 +257,123 @@ function CubeDiagram({ face, color, dir }: { face: string; color: string; dir: "
   const rightGrid = gridPaths(B, E, F, C);
   const leftGrid = gridPaths(D, C, F, G);
 
-  // Arrow paths positioned on the highlighted face
-  // CW arrow curves clockwise, CCW counter-clockwise
+  const cw = dir === "cw";
+
+  // Arrow paths that wrap AROUND the cube depending on axis
   let arrowPath = "";
   let arrowHead = "";
-  const cw = dir === "cw";
-  const is180 = dir === "180";
+  const arrowColor = "#c084fc"; // purple for whole-cube rotation
 
-  if (hTop) {
-    // Arrow on top face
-    if (is180) {
-      arrowPath = `M32,18 Q40,28 48,18`;
-      arrowHead = cw ? "49,15 48,21 44,17" : "31,15 32,21 36,17";
-    } else {
-      arrowPath = cw ? "M48,17 Q50,26 40,28 Q30,26 32,17" : "M32,17 Q30,26 40,28 Q50,26 48,17";
-      arrowHead = cw ? "50,18 48,14 45,19" : "30,18 32,14 35,19";
-    }
-  } else if (hRight) {
-    // Arrow on right face
-    if (is180) {
-      arrowPath = `M54,30 Q46,40 54,50`;
-      arrowHead = cw ? "56,50 52,50 54,46" : "56,30 52,30 54,34";
-    } else {
-      arrowPath = cw ? "M53,31 Q44,34 43,40 Q44,46 53,49" : "M53,49 Q44,46 43,40 Q44,34 53,31";
-      arrowHead = cw ? "56,49 51,49 52,45" : "56,31 51,31 52,35";
-    }
-  } else if (hLeft) {
-    // Arrow on left face
-    if (is180) {
-      arrowPath = `M26,30 Q34,40 26,50`;
-      arrowHead = cw ? "24,50 28,50 26,46" : "24,30 28,30 26,34";
-    } else {
-      arrowPath = cw ? "M27,49 Q36,46 37,40 Q36,34 27,31" : "M27,31 Q36,34 37,40 Q36,46 27,49";
-      arrowHead = cw ? "24,31 29,31 28,35" : "24,49 29,49 28,45";
-    }
-  } else if (hBottom) {
-    // Arrow below the cube indicating D face
-    arrowPath = cw ? "M48,56 Q50,64 40,66 Q30,64 32,56" : "M32,56 Q30,64 40,66 Q50,64 48,56";
-    arrowHead = cw ? "50,57 48,53 45,58" : "30,57 32,53 35,58";
+  if (axis === "y") {
+    // Horizontal rotation around Y axis (around the top/bottom)
+    arrowPath = cw
+      ? "M10,18 Q2,34 10,50 M70,50 Q78,34 70,18"
+      : "M70,18 Q78,34 70,50 M10,50 Q2,34 10,18";
+    arrowHead = cw ? "7,15 13,15 10,21" : "73,15 67,15 70,21";
+  } else if (axis === "x") {
+    // Rotation around X axis (left-right axis, tilts forward/back)
+    arrowPath = cw
+      ? "M57,6 Q70,20 66,40 M23,60 Q10,46 14,26"
+      : "M14,6 Q10,20 14,40 M66,60 Q70,46 66,26";
+    arrowHead = cw ? "54,3 60,3 57,9" : "11,3 17,3 14,9";
+  } else {
+    // z: rotation around Z axis (front-back axis, tilts sideways)
+    arrowPath = cw
+      ? "M24,6 Q10,12 8,28 M56,60 Q70,54 72,38"
+      : "M56,6 Q70,12 72,28 M24,60 Q10,54 8,38";
+    arrowHead = cw ? "21,4 27,4 24,10" : "53,4 59,4 56,10";
   }
 
   return (
-    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" className="shrink-0"
-      style={mirror ? { transform: "scaleX(-1)" } : undefined}
-    >
-      {/* D face indicator (bottom, behind the cube) */}
-      {hBottom && (
-        <polygon points={pts([C, B, E, F])} fill={color} opacity="0.15" />
-      )}
-      {hBottom && (
-        <polygon points={pts([C, D, G, F])} fill={color} opacity="0.1" />
-      )}
-
-      {/* Three visible faces */}
-      <polygon points={pts([A, B, C, D])} fill={topFill} opacity={topOp} />
-      <polygon points={pts([B, E, F, C])} fill={rightFill} opacity={rightOp} />
-      <polygon points={pts([D, C, F, G])} fill={leftFill} opacity={leftOp} />
+    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" className="shrink-0">
+      {/* Cube faces - all neutral/dim */}
+      <polygon points={pts([A, B, C, D])} fill="#1a1a2e" />
+      <polygon points={pts([B, E, F, C])} fill="#222240" />
+      <polygon points={pts([D, C, F, G])} fill="#1c1c35" />
 
       {/* Grid lines */}
-      <path d={topGrid} stroke="white" strokeWidth="0.5" opacity={hTop ? "0.5" : "0.12"} />
-      <path d={rightGrid} stroke="white" strokeWidth="0.5" opacity={hRight ? "0.5" : "0.12"} />
-      <path d={leftGrid} stroke="white" strokeWidth="0.5" opacity={hLeft ? "0.5" : "0.12"} />
+      <path d={topGrid} stroke="white" strokeWidth="0.5" opacity="0.12" />
+      <path d={rightGrid} stroke="white" strokeWidth="0.5" opacity="0.12" />
+      <path d={leftGrid} stroke="white" strokeWidth="0.5" opacity="0.12" />
 
-      {/* Face outlines */}
+      {/* Outlines */}
       <polygon points={pts([A, B, C, D])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
       <polygon points={pts([B, E, F, C])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
       <polygon points={pts([D, C, F, G])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
 
-      {/* Highlighted face border */}
-      {hTop && <polygon points={pts([A, B, C, D])} fill="none" stroke={color} strokeWidth="1.5" />}
-      {hRight && <polygon points={pts([B, E, F, C])} fill="none" stroke={color} strokeWidth="1.5" />}
-      {hLeft && <polygon points={pts([D, C, F, G])} fill="none" stroke={color} strokeWidth="1.5" />}
-      {hBottom && (
-        <>
-          <line x1={C[0]} y1={C[1]} x2={F[0]} y2={F[1]} stroke={color} strokeWidth="1.2" strokeDasharray="3 2" />
-          <line x1={B[0]} y1={B[1]} x2={E[0]} y2={E[1]} stroke={color} strokeWidth="1.2" strokeDasharray="3 2" opacity="0.5" />
-        </>
-      )}
+      {/* Wrap-around arrow */}
+      <path d={arrowPath} stroke={arrowColor} strokeWidth="2.5" strokeLinecap="round" />
+      <polygon points={arrowHead} fill={arrowColor} />
+    </svg>
+  );
+}
 
-      {/* Rotation arrow */}
-      {arrowPath && (
-        <>
-          <path d={arrowPath} stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-          <polygon points={arrowHead} fill="white" />
-        </>
-      )}
+// Slice (M) diagram: arrow on the middle layer of the cube
+function SliceDiagram({ dir }: { dir: "cw" | "ccw" | "180" }) {
+  const A = [40, 8], B = [62, 21], C = [40, 34], D = [18, 21];
+  const E = [62, 46], F = [40, 59], G = [18, 46];
+
+  function lerp(p1: number[], p2: number[], t: number): number[] {
+    return [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t];
+  }
+  function gridPaths(p0: number[], p1: number[], p2: number[], p3: number[]) {
+    const d: string[] = [];
+    for (let i = 1; i <= 2; i++) {
+      const t = i / 3;
+      const a = lerp(p0, p3, t), b = lerp(p1, p2, t);
+      d.push(`M${a[0]},${a[1]}L${b[0]},${b[1]}`);
+      const c2 = lerp(p0, p1, t), d2 = lerp(p3, p2, t);
+      d.push(`M${c2[0]},${c2[1]}L${d2[0]},${d2[1]}`);
+    }
+    return d.join(" ");
+  }
+  function pts(ps: number[][]) { return ps.map(p => p.join(",")).join(" "); }
+
+  const topGrid = gridPaths(A, B, C, D);
+  const rightGrid = gridPaths(B, E, F, C);
+  const leftGrid = gridPaths(D, C, F, G);
+
+  // Middle slice on the left face (M = middle layer, L direction)
+  // Highlight the center column of the left face
+  const sliceColor = "#a855f7";
+  const cw = dir === "cw";
+
+  // Center column of the left(front) face: between grid lines at 1/3 and 2/3 along DC direction
+  const p0 = lerp(D, C, 1 / 3);
+  const p1 = lerp(D, C, 2 / 3);
+  const p2 = lerp(G, F, 2 / 3);
+  const p3 = lerp(G, F, 1 / 3);
+
+  return (
+    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" className="shrink-0">
+      {/* Cube faces */}
+      <polygon points={pts([A, B, C, D])} fill="#1a1a2e" />
+      <polygon points={pts([B, E, F, C])} fill="#222240" />
+      <polygon points={pts([D, C, F, G])} fill="#1c1c35" />
+
+      {/* Highlighted slice */}
+      <polygon points={pts([p0, p1, p2, p3])} fill={sliceColor} opacity="0.35" />
+      <polygon points={pts([p0, p1, p2, p3])} fill="none" stroke={sliceColor} strokeWidth="1.2" />
+
+      {/* Grid lines */}
+      <path d={topGrid} stroke="white" strokeWidth="0.5" opacity="0.12" />
+      <path d={rightGrid} stroke="white" strokeWidth="0.5" opacity="0.12" />
+      <path d={leftGrid} stroke="white" strokeWidth="0.5" opacity="0.15" />
+
+      {/* Outlines */}
+      <polygon points={pts([A, B, C, D])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+      <polygon points={pts([B, E, F, C])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+      <polygon points={pts([D, C, F, G])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+
+      {/* Arrow on the slice (vertical on left face center) */}
+      <path
+        d={cw ? "M28,49 Q37,46 38,40 Q37,34 28,31" : "M28,31 Q37,34 38,40 Q37,46 28,49"}
+        stroke={sliceColor} strokeWidth="2.5" strokeLinecap="round" fill="none"
+      />
+      <polygon
+        points={cw ? "25,29 31,29 28,36" : "25,51 31,51 28,44"}
+        fill={sliceColor}
+      />
     </svg>
   );
 }
@@ -349,19 +512,24 @@ export default function HomePage() {
         {/* Slice & whole-cube rotations */}
         <div className="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
           {notationGuide.filter((n) => n.type).map((n) => {
-            const faceColor = FACE_COLOR[n.face];
-            const tagColor = n.type === "slice" ? "#a855f7" : "#38bdf8";
-            const tagLabel = n.type === "slice" ? "Slice" : "Rotation";
+            const isSlice = n.type === "slice";
+            const tagColor = isSlice ? "#a855f7" : "#c084fc";
+            const tagLabel = isSlice ? "Slice" : "Rotation";
+            const moveColor = isSlice ? "#a855f7" : "#c084fc";
             return (
               <div
                 key={n.move}
                 className="bg-card-bg border border-card-border rounded-xl px-3 py-3 flex items-center gap-2"
                 style={{ borderColor: `${tagColor}30` }}
               >
-                <CubeDiagram face={n.face} color={faceColor} dir={n.dir} />
+                {isSlice ? (
+                  <SliceDiagram dir={n.dir} />
+                ) : (
+                  <CubeRotationDiagram axis={n.move as "x" | "y" | "z"} dir={n.dir} />
+                )}
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-mono font-black" style={{ color: faceColor }}>
+                    <span className="text-xl font-mono font-black" style={{ color: moveColor }}>
                       {n.move}
                     </span>
                     <span
