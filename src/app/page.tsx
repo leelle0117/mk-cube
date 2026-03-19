@@ -47,20 +47,173 @@ const levels = [
   },
 ];
 
-const notationGuide = [
-  { move: "R", desc: "오른면 시계 90°" },
-  { move: "R'", desc: "오른면 반시계 90°" },
-  { move: "R2", desc: "오른면 180°" },
-  { move: "L", desc: "왼면 시계 90°" },
-  { move: "U", desc: "윗면 시계 90°" },
-  { move: "D", desc: "아랫면 시계 90°" },
-  { move: "F", desc: "앞면 시계 90°" },
-  { move: "B", desc: "뒷면 시계 90°" },
-  { move: "M", desc: "중간층 (L방향)" },
-  { move: "x", desc: "큐브 전체 (R방향)" },
-  { move: "y", desc: "큐브 전체 (U방향)" },
-  { move: "z", desc: "큐브 전체 (F방향)" },
+// Face colors matching the cube
+const FACE_COLOR: Record<string, string> = {
+  R: "#e94560", L: "#ff9f43", U: "#ffd32a", D: "#ffffff", F: "#00b894", B: "#0984e3",
+};
+
+interface NotationItem {
+  move: string;
+  face: string;       // which face (R/L/U/D/F/B)
+  desc: string;
+  dir: "cw" | "ccw" | "180";
+  type?: "slice" | "rotation";
+}
+
+const notationGuide: NotationItem[] = [
+  { move: "R",  face: "R", desc: "오른면 시계 90°",    dir: "cw" },
+  { move: "R'", face: "R", desc: "오른면 반시계 90°",  dir: "ccw" },
+  { move: "L",  face: "L", desc: "왼면 시계 90°",      dir: "cw" },
+  { move: "L'", face: "L", desc: "왼면 반시계 90°",    dir: "ccw" },
+  { move: "U",  face: "U", desc: "윗면 시계 90°",      dir: "cw" },
+  { move: "U'", face: "U", desc: "윗면 반시계 90°",    dir: "ccw" },
+  { move: "D",  face: "D", desc: "아랫면 시계 90°",    dir: "cw" },
+  { move: "D'", face: "D", desc: "아랫면 반시계 90°",  dir: "ccw" },
+  { move: "F",  face: "F", desc: "앞면 시계 90°",      dir: "cw" },
+  { move: "F'", face: "F", desc: "앞면 반시계 90°",    dir: "ccw" },
+  { move: "B",  face: "B", desc: "뒷면 시계 90°",      dir: "cw" },
+  { move: "B'", face: "B", desc: "뒷면 반시계 90°",    dir: "ccw" },
+  { move: "M",  face: "L", desc: "중간층 (L방향)",     dir: "cw", type: "slice" },
+  { move: "x",  face: "R", desc: "큐브 전체 (R방향)",  dir: "cw", type: "rotation" },
+  { move: "y",  face: "U", desc: "큐브 전체 (U방향)",  dir: "cw", type: "rotation" },
+  { move: "z",  face: "F", desc: "큐브 전체 (F방향)",  dir: "cw", type: "rotation" },
 ];
+
+// 3D isometric cube SVG with highlighted face and rotation arrow
+function CubeDiagram({ face, color, dir }: { face: string; color: string; dir: "cw" | "ccw" | "180" }) {
+  // Standard isometric view: Top=U, Left=F, Right=R
+  // Mirrored view for L, B: Top=U, Left=R(→L mirrored), Right=F(→B mirrored)
+  const mirror = face === "L" || face === "B";
+
+  // Which of the 3 visible faces to highlight
+  let hTop = face === "U";
+  let hRight = mirror ? (face === "L") : (face === "R");
+  let hLeft = mirror ? (face === "B") : (face === "F");
+  const hBottom = face === "D";
+  if (hBottom) { hTop = false; hRight = false; hLeft = false; }
+
+  // Face fills
+  const topFill = hTop ? color : "#1a1a2e";
+  const rightFill = hRight ? color : "#222240";
+  const leftFill = hLeft ? color : "#1c1c35";
+  const topOp = hTop ? 0.9 : 1;
+  const rightOp = hRight ? 0.9 : 1;
+  const leftOp = hLeft ? 0.9 : 1;
+
+  // Isometric vertices (viewBox 80x72)
+  // A=back-top, B=right-top, C=front-top, D=left-top
+  // E=right-bottom, F=front-bottom, G=left-bottom
+  const A = [40, 8], B = [62, 21], C = [40, 34], D = [18, 21];
+  const E = [62, 46], F = [40, 59], G = [18, 46];
+
+  function lerp(p1: number[], p2: number[], t: number): number[] {
+    return [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t];
+  }
+  function gridPaths(p0: number[], p1: number[], p2: number[], p3: number[]) {
+    const d: string[] = [];
+    for (let i = 1; i <= 2; i++) {
+      const t = i / 3;
+      const a = lerp(p0, p3, t), b = lerp(p1, p2, t);
+      d.push(`M${a[0]},${a[1]}L${b[0]},${b[1]}`);
+      const c2 = lerp(p0, p1, t), d2 = lerp(p3, p2, t);
+      d.push(`M${c2[0]},${c2[1]}L${d2[0]},${d2[1]}`);
+    }
+    return d.join(" ");
+  }
+  function pts(ps: number[][]) { return ps.map(p => p.join(",")).join(" "); }
+
+  const topGrid = gridPaths(A, B, C, D);
+  const rightGrid = gridPaths(B, E, F, C);
+  const leftGrid = gridPaths(D, C, F, G);
+
+  // Arrow paths positioned on the highlighted face
+  // CW arrow curves clockwise, CCW counter-clockwise
+  let arrowPath = "";
+  let arrowHead = "";
+  const cw = dir === "cw";
+  const is180 = dir === "180";
+
+  if (hTop) {
+    // Arrow on top face
+    if (is180) {
+      arrowPath = `M32,18 Q40,28 48,18`;
+      arrowHead = cw ? "49,15 48,21 44,17" : "31,15 32,21 36,17";
+    } else {
+      arrowPath = cw ? "M48,17 Q50,26 40,28 Q30,26 32,17" : "M32,17 Q30,26 40,28 Q50,26 48,17";
+      arrowHead = cw ? "50,18 48,14 45,19" : "30,18 32,14 35,19";
+    }
+  } else if (hRight) {
+    // Arrow on right face
+    if (is180) {
+      arrowPath = `M54,30 Q46,40 54,50`;
+      arrowHead = cw ? "56,50 52,50 54,46" : "56,30 52,30 54,34";
+    } else {
+      arrowPath = cw ? "M53,31 Q44,34 43,40 Q44,46 53,49" : "M53,49 Q44,46 43,40 Q44,34 53,31";
+      arrowHead = cw ? "56,49 51,49 52,45" : "56,31 51,31 52,35";
+    }
+  } else if (hLeft) {
+    // Arrow on left face
+    if (is180) {
+      arrowPath = `M26,30 Q34,40 26,50`;
+      arrowHead = cw ? "24,50 28,50 26,46" : "24,30 28,30 26,34";
+    } else {
+      arrowPath = cw ? "M27,49 Q36,46 37,40 Q36,34 27,31" : "M27,31 Q36,34 37,40 Q36,46 27,49";
+      arrowHead = cw ? "24,31 29,31 28,35" : "24,49 29,49 28,45";
+    }
+  } else if (hBottom) {
+    // Arrow below the cube indicating D face
+    arrowPath = cw ? "M48,56 Q50,64 40,66 Q30,64 32,56" : "M32,56 Q30,64 40,66 Q50,64 48,56";
+    arrowHead = cw ? "50,57 48,53 45,58" : "30,57 32,53 35,58";
+  }
+
+  return (
+    <svg width="80" height="72" viewBox="0 0 80 72" fill="none" className="shrink-0"
+      style={mirror ? { transform: "scaleX(-1)" } : undefined}
+    >
+      {/* D face indicator (bottom, behind the cube) */}
+      {hBottom && (
+        <polygon points={pts([C, B, E, F])} fill={color} opacity="0.15" />
+      )}
+      {hBottom && (
+        <polygon points={pts([C, D, G, F])} fill={color} opacity="0.1" />
+      )}
+
+      {/* Three visible faces */}
+      <polygon points={pts([A, B, C, D])} fill={topFill} opacity={topOp} />
+      <polygon points={pts([B, E, F, C])} fill={rightFill} opacity={rightOp} />
+      <polygon points={pts([D, C, F, G])} fill={leftFill} opacity={leftOp} />
+
+      {/* Grid lines */}
+      <path d={topGrid} stroke="white" strokeWidth="0.5" opacity={hTop ? "0.5" : "0.12"} />
+      <path d={rightGrid} stroke="white" strokeWidth="0.5" opacity={hRight ? "0.5" : "0.12"} />
+      <path d={leftGrid} stroke="white" strokeWidth="0.5" opacity={hLeft ? "0.5" : "0.12"} />
+
+      {/* Face outlines */}
+      <polygon points={pts([A, B, C, D])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+      <polygon points={pts([B, E, F, C])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+      <polygon points={pts([D, C, F, G])} fill="none" stroke="white" strokeWidth="0.8" opacity="0.3" />
+
+      {/* Highlighted face border */}
+      {hTop && <polygon points={pts([A, B, C, D])} fill="none" stroke={color} strokeWidth="1.5" />}
+      {hRight && <polygon points={pts([B, E, F, C])} fill="none" stroke={color} strokeWidth="1.5" />}
+      {hLeft && <polygon points={pts([D, C, F, G])} fill="none" stroke={color} strokeWidth="1.5" />}
+      {hBottom && (
+        <>
+          <line x1={C[0]} y1={C[1]} x2={F[0]} y2={F[1]} stroke={color} strokeWidth="1.2" strokeDasharray="3 2" />
+          <line x1={B[0]} y1={B[1]} x2={E[0]} y2={E[1]} stroke={color} strokeWidth="1.2" strokeDasharray="3 2" opacity="0.5" />
+        </>
+      )}
+
+      {/* Rotation arrow */}
+      {arrowPath && (
+        <>
+          <path d={arrowPath} stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <polygon points={arrowHead} fill="white" />
+        </>
+      )}
+    </svg>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -156,16 +309,73 @@ export default function HomePage() {
         <p className="text-gray-400 text-center mb-8 max-w-2xl mx-auto">
           큐브 알고리즘에서 사용하는 표기법입니다. {`'`} (프라임)은 반시계 방향, 숫자 2는 180도 회전을 의미합니다.
         </p>
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 max-w-3xl mx-auto">
-          {notationGuide.map((n) => (
-            <div
-              key={n.move}
-              className="bg-card-bg border border-card-border rounded-xl p-3 text-center hover:border-[#e94560]/30 transition-colors"
-            >
-              <div className="text-lg font-mono font-bold text-[#e94560] mb-1">{n.move}</div>
-              <div className="text-xs text-gray-500">{n.desc}</div>
-            </div>
-          ))}
+
+        {/* Main face moves */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-4xl mx-auto mb-6">
+          {notationGuide.filter((n) => !n.type).map((n) => {
+            const faceColor = FACE_COLOR[n.face];
+            return (
+              <div
+                key={n.move}
+                className="bg-card-bg border border-card-border rounded-xl p-3 hover:scale-[1.03] transition-all group"
+                style={{ borderColor: `${faceColor}30` }}
+              >
+                <div className="flex items-center gap-2">
+                  {/* 3D isometric cube diagram */}
+                  <CubeDiagram face={n.face} color={faceColor} dir={n.dir} />
+
+                  <div className="flex-1 min-w-0">
+                    <span
+                      className="text-2xl font-mono font-black leading-none"
+                      style={{ color: faceColor }}
+                    >
+                      {n.move}
+                    </span>
+                    <div className="text-[11px] text-gray-500 mt-1">{n.desc}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 max-w-4xl mx-auto my-8">
+          <div className="flex-1 h-px bg-white/15" />
+          <span className="text-xs text-gray-400 font-semibold tracking-wide">특수 회전</span>
+          <div className="flex-1 h-px bg-white/15" />
+        </div>
+
+        {/* Slice & whole-cube rotations */}
+        <div className="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
+          {notationGuide.filter((n) => n.type).map((n) => {
+            const faceColor = FACE_COLOR[n.face];
+            const tagColor = n.type === "slice" ? "#a855f7" : "#38bdf8";
+            const tagLabel = n.type === "slice" ? "Slice" : "Rotation";
+            return (
+              <div
+                key={n.move}
+                className="bg-card-bg border border-card-border rounded-xl px-3 py-3 flex items-center gap-2"
+                style={{ borderColor: `${tagColor}30` }}
+              >
+                <CubeDiagram face={n.face} color={faceColor} dir={n.dir} />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-mono font-black" style={{ color: faceColor }}>
+                      {n.move}
+                    </span>
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: `${tagColor}20`, color: tagColor }}
+                    >
+                      {tagLabel}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-gray-500">{n.desc}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
