@@ -787,11 +787,12 @@ export default function SimulatorPage() {
         <div>
           {/* 3D Cube View */}
           <div
-            className="bg-card-bg border border-card-border rounded-2xl overflow-hidden"
-            style={{ minHeight: 500 }}
+            className="bg-card-bg border border-card-border rounded-2xl overflow-hidden relative"
+            style={{ minHeight: "min(500px, 60vh)" }}
           >
             <div className="flex items-center justify-between px-4 pt-3">
-              <span className="text-xs text-gray-500">마우스 드래그로 회전 / 스크롤로 확대</span>
+              <span className="text-xs text-gray-500 hidden sm:inline">마우스 드래그로 회전 / 스크롤로 확대</span>
+              <span className="text-xs text-gray-500 sm:hidden">터치로 회전</span>
               <div className="flex gap-2">
                 <button
                   onClick={resetAll}
@@ -804,15 +805,61 @@ export default function SimulatorPage() {
             {mounted ? (
               <Canvas
                 camera={{ position: [4, 3, 5], fov: 45 }}
-                style={{ height: 480, background: "#0d0d1a" }}
+                style={{ height: "min(480px, 55vh)", background: "#0d0d1a" }}
               >
                 <CubeScene controlRef={cubeControlRef} speedRef={speedRef} />
               </Canvas>
             ) : (
-              <div className="flex items-center justify-center h-[480px] text-gray-500">
+              <div className="flex items-center justify-center text-gray-500" style={{ height: "min(480px, 55vh)" }}>
                 3D 엔진 로딩 중...
               </div>
             )}
+
+            {/* Floating controls overlay for mobile */}
+            <div className="absolute bottom-3 left-3 right-3 flex gap-2 lg:hidden">
+              <button
+                onClick={() => !autoPlay && goToStep(Math.max(0, currentStep - 1))}
+                disabled={currentStep === 0 || autoPlay || isAnimating}
+                className="px-3 py-2 rounded-xl text-xs font-medium bg-black/50 text-gray-300 backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                ← 이전
+              </button>
+              <button
+                onClick={() => animateStep(currentStep)}
+                disabled={autoPlay || isAnimating || !step.solution}
+                className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#e94560]/70 text-white backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                ▶ 이 단계 재생
+              </button>
+              <button
+                onClick={() => {
+                  if (autoPlay) {
+                    setAutoPlay(false);
+                    abortRef.current = true;
+                    setTimeout(() => {
+                      abortRef.current = false;
+                      setIsAnimating(false);
+                    }, 200);
+                  } else {
+                    setAutoPlay(true);
+                  }
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold backdrop-blur-sm transition-all ${
+                  autoPlay
+                    ? "bg-[#e94560]/80 text-white"
+                    : "bg-[#00b894]/40 text-[#00b894]"
+                }`}
+              >
+                {autoPlay ? "⏸" : "▶ 전체"}
+              </button>
+              <button
+                onClick={() => !autoPlay && goToStep(Math.min(lblSolveDemo.length - 1, currentStep + 1))}
+                disabled={currentStep === lblSolveDemo.length - 1 || autoPlay || isAnimating}
+                className="px-3 py-2 rounded-xl text-xs font-medium bg-black/50 text-gray-300 backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                다음 →
+              </button>
+            </div>
           </div>
 
           {/* Manual Controls */}

@@ -523,18 +523,21 @@ export default function OptimalSolverPage() {
         {/* Left: 3D Canvas */}
         <div>
           <div
-            className="bg-card-bg border border-card-border rounded-2xl overflow-hidden"
-            style={{ minHeight: 500 }}
+            className="bg-card-bg border border-card-border rounded-2xl overflow-hidden relative"
+            style={{ minHeight: "min(500px, 60vh)" }}
           >
             <div className="flex items-center justify-between px-4 pt-3">
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 hidden sm:inline">
                 마우스 드래그로 회전 / 스크롤로 확대
+              </span>
+              <span className="text-xs text-gray-500 sm:hidden">
+                터치로 회전
               </span>
             </div>
             {mounted ? (
               <Canvas
                 camera={{ position: [4, 3, 5], fov: 45 }}
-                style={{ height: 480, background: "#0d0d1a" }}
+                style={{ height: "min(480px, 55vh)", background: "#0d0d1a" }}
               >
                 <CubeScene
                   controlRef={cubeControlRef}
@@ -542,10 +545,34 @@ export default function OptimalSolverPage() {
                 />
               </Canvas>
             ) : (
-              <div className="flex items-center justify-center h-[480px] text-gray-500">
+              <div className="flex items-center justify-center text-gray-500" style={{ height: "min(480px, 55vh)" }}>
                 3D 엔진 로딩 중...
               </div>
             )}
+
+            {/* Floating controls overlay for mobile */}
+            <div className="absolute bottom-3 left-3 right-3 flex gap-2 lg:hidden">
+              <button
+                onClick={handleScramble}
+                disabled={isAnimating || phase === "computing"}
+                className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#533483]/80 text-[#a855f7] backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                스크램블
+              </button>
+              <button
+                onClick={handleSolve}
+                disabled={phase !== "scrambled" || !solverReady}
+                className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#00b894]/40 text-[#00b894] backdrop-blur-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                {phase === "computing" ? "계산 중..." : "최적 풀기"}
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-3 py-2 rounded-xl text-xs font-medium bg-black/50 text-gray-300 backdrop-blur-sm transition-all"
+              >
+                리셋
+              </button>
+            </div>
           </div>
 
           {/* Algorithm comparison */}
