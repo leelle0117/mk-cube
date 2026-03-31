@@ -574,6 +574,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="text-center text-gray-600 text-sm pb-8 border-t border-card-border pt-8">
         <p>CubeMaster - 루빅스큐브 마스터 가이드</p>
+        <p className="mt-1">배포 : 리앤컴퍼니 이미경</p>
         <p className="mt-1">알고리즘 출처: CFOP Method (Jessica Fridrich)</p>
       </footer>
     </div>
